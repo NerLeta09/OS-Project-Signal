@@ -1,5 +1,7 @@
 # CS302 Project: Signal
 
+有问题可以放在这里讨论
+
 1. 请注意：Origin仓库为 https://github.com/yuk1i/SUSTechOS.git 
 2. Origin会不定期更新，我们要从上面拉取更新
 3. 而Project仓库(https://github.com/NerLeta09/OS-Project-Signal.git)才是我们的仓库，我们在这里完成Project
@@ -15,7 +17,7 @@
 参照POSIX.1 规范中的2.1 Execution of signal handlers 以及 2.1 Signal Actions，在回退到用户空间时检
 查Pending 的 signal，如果用户指定了处理函数，则在用户态跳转到signal 处理函数，并在其返回后恢复执行
 signal handler 前的用户态状态。
-1. 在每次从内核回退到用户态时检查PendingSignals。
+1. 在每次从内核回退到用户态时检查PendingSignals。(do_signal())
 2. 如果该Signal没有被Blocked或者不能被Blocked，执行(SIG_DFL、SIG_IGN) 或准备跳转到以前在sigac
 tion 系统调用里指定的用户态处理函数。
 3. 在用户栈上保存用户程序进入 signal handler 前的状态，即 ucontext 结构体，包含 PC 指针、GPRs

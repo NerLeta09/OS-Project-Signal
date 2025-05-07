@@ -82,17 +82,31 @@ int do_signal(void) {
     struct proc *p = curr_proc();
     struct trapframe *tf = p->trapframe;
 
+    //find signal
     for(int signo = SIGMIN; signo <= SIGMAX; signo++) {
         if (!sigismember(&p->signal.sigpending, signo)) continue;
-        if (sigismember(&p->signal.sigmask, signo)) continue;
-        //find signal
+
+        if (signo == SIGKILL || signo == SIGSTOP) { //cannot block
+            sigdelset(&p->signal.sigpending, signo);
+            setkilled(p, -10 - signo);
+            continue;
+        }
+        if (sigismember(&p->signal.sigmask, signo)) continue;//No block
         //获取当前signo handler
-        //从sigpending中将signo移除
-        //handle 进程可以指定某个 signal 的处理方式为 SIG_DFL、SIG_IGN 或指定的 sa_sigaction
-
+        struct sigaction *sa = &p->signal.sa[signo];
         
-        //保存寄存器上下文
-
+        sigdelset(&p->signal.sigpending, signo);
+        //ignore
+        if (sa->sa_sigaction == SIG_IGN)
+            continue;
+        //Default
+        if(sa->sa_sigaction == SIG_DFL) {
+            setkilled(p, -10 - signo);
+            continue;
+        }
+        //自定义handler: sigaction
+        //TODO
+        
     }
     return 0; //no signal in pending, return
 }
@@ -119,17 +133,11 @@ int sys_sigaction(int signo, const sigaction_t __user *act, sigaction_t __user *
 int sys_sigreturn() {
     //TODO: Finish.
     struct proc *p = curr_proc();
-    struct trapframe *ktf = p->trapframe;  
+    struct trapframe *tf = p->trapframe;  
     
     //refine sigmask
-    p->signal.sigmask = p->signal.sigpending;
+    p->signal.sigmask; // =
 
-    //refine context
-
-    //refine pc & sp    
-    
-    //refine other regs
-    
     return 0;
 }
 
@@ -176,17 +184,18 @@ int sys_sigpending(sigset_t __user *set) {
 
 int sys_sigkill(int pid, int signo, int code) {
     if (signo < SIGMIN || signo > SIGMAX) return -1;
-    struct proc *p = NULL;
-    for(int i = 0; i < NPROC; i++) {
-        struct proc *tmpp = pool[i];
-        if(tmpp && tmpp->pid == pid) { //How to find proc by pid? 要不要在proc.c里写个函数？
-            p = tmpp;
-            //向目标进程发送signal
-            sigaddset(&p->signal.sigpending, signo);
+    struct proc *p = findByPid(pid);
+    if(p == NULL) return -1; // no this proc
 
-            setkilled(p, -10 - signo);
-            return 0;
-        }
-    }
-    return -1;//no find proc
+    // if (signo == SIGKILL) {
+    //     //base checkpoint 2 强制终止
+    //     setkilled(p, -10 - signo);
+    //     return 0;
+    // }
+    
+    //向目标进程发送signal
+    sigaddset(&p->signal.sigpending, signo);
+    //About code
+    p->signal.siginfos[signo].si_code = code;//all zero
+    return 0;
 }

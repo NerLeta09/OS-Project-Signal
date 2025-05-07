@@ -394,3 +394,18 @@ int iskilled(struct proc *p) {
     release(&p->lock);
     return k;
 }
+
+
+struct proc *findByPid(int pid) {
+    struct proc *p;
+    for (int i = 0; i < NPROC; i++) {
+        p = pool[i];
+        acquire(&p->lock);
+        if (p->pid == pid) {
+            release(&p->lock);
+            return p;
+        }
+        release(&p->lock);
+    }
+    return NULL;
+}
