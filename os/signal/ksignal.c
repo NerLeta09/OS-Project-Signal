@@ -86,11 +86,6 @@ int do_signal(void) {
     for(int signo = SIGMIN; signo <= SIGMAX; signo++) {
         if (!sigismember(&p->signal.sigpending, signo)) continue;
 
-        if (signo == SIGKILL || signo == SIGSTOP) { //cannot block
-            sigdelset(&p->signal.sigpending, signo);
-            setkilled(p, -10 - signo);
-            continue;
-        }
         if (sigismember(&p->signal.sigmask, signo)) continue;//No block
         //获取当前signo handler
         struct sigaction *sa = &p->signal.sa[signo];
@@ -135,9 +130,6 @@ int sys_sigreturn() {
     struct proc *p = curr_proc();
     struct trapframe *tf = p->trapframe;  
     
-    //refine sigmask
-    p->signal.sigmask; // =
-
     return 0;
 }
 
@@ -189,7 +181,7 @@ int sys_sigkill(int pid, int signo, int code) {
 
     // if (signo == SIGKILL) {
     //     //base checkpoint 2 强制终止
-    //     setkilled(p, -10 - signo);
+    //     setkilled(p, -10 - SIGKILL);
     //     return 0;
     // }
     
