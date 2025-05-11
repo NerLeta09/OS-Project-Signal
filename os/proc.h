@@ -97,6 +97,8 @@ void exit(int);
 int kill(int pid);
 int iskilled(struct proc *);
 void setkilled(struct proc *, int reason);
+
+// findByPid函数声明
 struct proc *findByPid(int pid);
 
 void sleep(void *chan, spinlock_t *lk);
