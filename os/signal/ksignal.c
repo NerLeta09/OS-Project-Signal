@@ -223,24 +223,24 @@ int sys_sigaction(int signo, const sigaction_t __user *act, sigaction_t __user *
     }
     
     // 获取锁
-    acquire(&p->lock);
+    // acquire(&p->lock);
     acquire(&p->mm->lock);
     
-    // 检查SIGKILL和SIGSTOP不能被忽略或捕获
-    if ((signo == SIGKILL || signo == SIGSTOP) && act != NULL) {
-        struct sigaction tmp_sa;
-        if (copy_from_user(p->mm, (char *)&tmp_sa, (uint64)act, sizeof(struct sigaction)) < 0) {
-            release(&p->mm->lock);
-            release(&p->lock);
-            return -EINVAL;
-        }
+    // // 检查SIGKILL和SIGSTOP不能被忽略或捕获
+    // if ((signo == SIGKILL || signo == SIGSTOP) && act != NULL) {
+    //     struct sigaction tmp_sa;
+    //     if (copy_from_user(p->mm, (char *)&tmp_sa, (uint64)act, sizeof(struct sigaction)) < 0) {
+    //         release(&p->mm->lock);
+    //         // release(&p->lock);
+    //         return -EINVAL;
+    //     }
         
-        if (tmp_sa.sa_sigaction != SIG_DFL) {
-            release(&p->mm->lock);
-            release(&p->lock);
-            return -EINVAL;
-        }
-    }
+    //     if (tmp_sa.sa_sigaction != SIG_DFL) {
+    //         release(&p->mm->lock);
+    //         // release(&p->lock);
+    //         return -EINVAL;
+    //     }
+    // }
     
     struct sigaction *old_sa = &p->signal.sa[signo];
     
@@ -248,7 +248,7 @@ int sys_sigaction(int signo, const sigaction_t __user *act, sigaction_t __user *
     if (oldact != NULL) {
         if (copy_to_user(p->mm, (uint64)oldact, (char *)old_sa, sizeof(struct sigaction)) < 0) {
             release(&p->mm->lock);
-            release(&p->lock);
+            // release(&p->lock);
             return -EINVAL;
         }
     }
@@ -257,13 +257,13 @@ int sys_sigaction(int signo, const sigaction_t __user *act, sigaction_t __user *
     if (act != NULL) {
         if (copy_from_user(p->mm, (char *)old_sa, (uint64)act, sizeof(struct sigaction)) < 0) {
             release(&p->mm->lock);
-            release(&p->lock);
+            // release(&p->lock);
             return -EINVAL;
         }
     }
     
     release(&p->mm->lock);
-    release(&p->lock);
+    // release(&p->lock);
     
     return 0;
 }
@@ -412,14 +412,14 @@ int sys_sigkill(int pid, int signo, int code) {
     // 特殊处理SIGKILL和SIGSTOP信号，直接结束或停止进程
     if (signo == SIGKILL) {
         // 获取p->lock以保护对进程状态的修改
-        acquire(&p->lock);
+        // acquire(&p->lock); //这一步重复持有锁了，要注释掉
         setkilled(p, -10 - signo);
-        release(&p->lock);
+        // release(&p->lock);
         return 0;
     }
     
     // 获取锁以保护对signal结构的修改
-    acquire(&p->lock);
+    // acquire(&p->lock);
     
     // 设置pending信号位
     sigaddset(&p->signal.sigpending, signo);
@@ -429,7 +429,7 @@ int sys_sigkill(int pid, int signo, int code) {
     p->signal.siginfos[signo].si_code = code;
     p->signal.siginfos[signo].si_pid = curr_proc()->pid; // 设置发送进程的pid
     
-    release(&p->lock);
+    // release(&p->lock);
     
     return 0;
 }
