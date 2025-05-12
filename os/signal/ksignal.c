@@ -167,8 +167,7 @@ int do_signal(void) {
         uint64 uc_addr = new_sp + sizeof(siginfo_t);
         uint64 info_addr = new_sp;
         
-        // 获取锁，先获取p->lock，再获取p->mm->lock
-        acquire(&p->lock);
+        // 获取锁，获取p->mm->lock
         acquire(&p->mm->lock);
         
         // 复制到用户空间
@@ -178,9 +177,8 @@ int do_signal(void) {
             copy_result = copy_to_user(p->mm, info_addr, (char *)&info, sizeof(siginfo_t));
         }
         
-        // 释放锁，按获取顺序的相反顺序释放
+        // 释放锁
         release(&p->mm->lock);
-        release(&p->lock);
         
         if (copy_result < 0) {
             // 复制失败，忽略这个信号
@@ -223,7 +221,6 @@ int sys_sigaction(int signo, const sigaction_t __user *act, sigaction_t __user *
     }
     
     // 获取锁
-    // acquire(&p->lock);
     acquire(&p->mm->lock);
     
     // // 检查SIGKILL和SIGSTOP不能被忽略或捕获
@@ -248,7 +245,6 @@ int sys_sigaction(int signo, const sigaction_t __user *act, sigaction_t __user *
     if (oldact != NULL) {
         if (copy_to_user(p->mm, (uint64)oldact, (char *)old_sa, sizeof(struct sigaction)) < 0) {
             release(&p->mm->lock);
-            // release(&p->lock);
             return -EINVAL;
         }
     }
@@ -257,13 +253,11 @@ int sys_sigaction(int signo, const sigaction_t __user *act, sigaction_t __user *
     if (act != NULL) {
         if (copy_from_user(p->mm, (char *)old_sa, (uint64)act, sizeof(struct sigaction)) < 0) {
             release(&p->mm->lock);
-            // release(&p->lock);
             return -EINVAL;
         }
     }
     
     release(&p->mm->lock);
-    // release(&p->lock);
     
     return 0;
 }
@@ -280,14 +274,12 @@ int sys_sigreturn() {
     struct ucontext uc;
     
     // 获取锁
-    acquire(&p->lock);
     acquire(&p->mm->lock);
     
     int copy_result = copy_from_user(p->mm, (char *)&uc, uc_addr, sizeof(struct ucontext));
     
     // 释放锁
     release(&p->mm->lock);
-    release(&p->lock);
     
     if (copy_result < 0) {
         return -EINVAL;
@@ -336,13 +328,11 @@ int sys_sigreturn() {
 int sys_sigprocmask(int how, const sigset_t __user *set, sigset_t __user *oldset) {
     struct proc *p = curr_proc();
     
-    acquire(&p->lock);
     acquire(&p->mm->lock);
     
     if(oldset != NULL) {
         if (copy_to_user(p->mm, (uint64)oldset, (char *)&p->signal.sigmask, sizeof(sigset_t)) < 0) {
             release(&p->mm->lock);
-            release(&p->lock);
             return -EINVAL;
         }
     }
@@ -351,7 +341,6 @@ int sys_sigprocmask(int how, const sigset_t __user *set, sigset_t __user *oldset
         sigset_t tmp;
         if (copy_from_user(p->mm, (char *)&tmp, (uint64)set, sizeof(sigset_t)) < 0) {
             release(&p->mm->lock);
-            release(&p->lock);
             return -EINVAL;
         }
         
@@ -367,13 +356,11 @@ int sys_sigprocmask(int how, const sigset_t __user *set, sigset_t __user *oldset
                 break;
             default:
                 release(&p->mm->lock);
-                release(&p->lock);
                 return -EINVAL;
         }
     }
     
     release(&p->mm->lock);
-    release(&p->lock);
 
     return 0;
 }
@@ -384,13 +371,9 @@ int sys_sigpending(sigset_t __user *set) {
     if (set == NULL) 
         return -EINVAL;
     
-    acquire(&p->lock);
     acquire(&p->mm->lock);
-    
     int result = copy_to_user(p->mm, (uint64)set, (char *)&p->signal.sigpending, sizeof(sigset_t));
-    
     release(&p->mm->lock);
-    release(&p->lock);
     
     if (result < 0) {
         return -EINVAL;
@@ -419,7 +402,7 @@ int sys_sigkill(int pid, int signo, int code) {
     }
     
     // 获取锁以保护对signal结构的修改
-    // acquire(&p->lock);
+    acquire(&p->lock);
     
     // 设置pending信号位
     sigaddset(&p->signal.sigpending, signo);
@@ -429,7 +412,7 @@ int sys_sigkill(int pid, int signo, int code) {
     p->signal.siginfos[signo].si_code = code;
     p->signal.siginfos[signo].si_pid = curr_proc()->pid; // 设置发送进程的pid
     
-    // release(&p->lock);
+    release(&p->lock);
     
     return 0;
 }
