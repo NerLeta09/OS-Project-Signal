@@ -365,7 +365,7 @@ int kill(int pid) {
         p = pool[i];
         acquire(&p->lock);
         if (p->pid == pid) {
-            p->killed = -1;
+            p->killed = -10 - SIGKILL; // 使用SIGKILL信号码
             if (p->state == SLEEPING) {
                 // Wake process from sleep().
                 p->state = RUNNABLE;
@@ -402,7 +402,7 @@ struct proc *findByPid(int pid) {
         p = pool[i];
         acquire(&p->lock);
         if (p->pid == pid) {
-            release(&p->lock);
+            // 不释放锁，调用者负责释放
             return p;
         }
         release(&p->lock);

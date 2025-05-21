@@ -88,9 +88,36 @@ int do_signal(void) {
             continue;
 
         // SIGKILL和SIGSTOP不能被阻塞
-        if (signo == SIGKILL || signo == SIGSTOP) {
+        if (signo == SIGKILL) {
             sigdelset(&p->signal.sigpending, signo);
-            setkilled(p, -10 - signo);
+            // 直接设置killed值，避免调用setkilled可能导致的锁重入问题
+            p->killed = -10 - signo;
+            continue;
+        }
+        
+        // 处理SIGSTOP信号
+        if (signo == SIGSTOP) {
+            sigdelset(&p->signal.sigpending, signo);
+            p->state = STOPPED;
+            debugf("proc %d is stopped by SIGSTOP", p->pid);
+            yield(); // 放弃CPU
+            continue;
+        }
+        
+        // 处理SIGCONT信号
+        if (signo == SIGCONT) {
+            sigdelset(&p->signal.sigpending, signo);
+            // 如果进程已经被SIGSTOP停止，恢复它
+            if (p->state == STOPPED) {
+                p->state = RUNNABLE;
+                // 注意：不要在这里调用add_task，因为do_signal是在中断上下文调用的
+                // 由调度器负责添加RUNNABLE状态的进程到任务队列
+                debugf("proc %d is continued by SIGCONT", p->pid);
+            }
+            // 清除所有等待的SIGSTOP信号
+            if (sigismember(&p->signal.sigpending, SIGSTOP)) {
+                sigdelset(&p->signal.sigpending, SIGSTOP);
+            }
             continue;
         }
         
@@ -223,21 +250,19 @@ int sys_sigaction(int signo, const sigaction_t __user *act, sigaction_t __user *
     // 获取锁
     acquire(&p->mm->lock);
     
-    // // 检查SIGKILL和SIGSTOP不能被忽略或捕获
-    // if ((signo == SIGKILL || signo == SIGSTOP) && act != NULL) {
-    //     struct sigaction tmp_sa;
-    //     if (copy_from_user(p->mm, (char *)&tmp_sa, (uint64)act, sizeof(struct sigaction)) < 0) {
-    //         release(&p->mm->lock);
-    //         // release(&p->lock);
-    //         return -EINVAL;
-    //     }
+    // 检查SIGKILL和SIGSTOP不能被忽略或捕获
+    if ((signo == SIGKILL || signo == SIGSTOP) && act != NULL) {
+        struct sigaction tmp_sa;
+        if (copy_from_user(p->mm, (char *)&tmp_sa, (uint64)act, sizeof(struct sigaction)) < 0) {
+            release(&p->mm->lock);
+            return -EINVAL;
+        }
         
-    //     if (tmp_sa.sa_sigaction != SIG_DFL) {
-    //         release(&p->mm->lock);
-    //         // release(&p->lock);
-    //         return -EINVAL;
-    //     }
-    // }
+        if (tmp_sa.sa_sigaction != SIG_DFL) {
+            release(&p->mm->lock);
+            return -EINVAL;
+        }
+    }
     
     struct sigaction *old_sa = &p->signal.sa[signo];
     
@@ -388,21 +413,60 @@ int sys_sigkill(int pid, int signo, int code) {
         return -EINVAL;
     }
     
-    // 查找目标进程
+    // 查找目标进程（现在findByPid不会释放锁）
     struct proc *p = findByPid(pid);
     if(p == NULL) return -EINVAL; // 进程不存在
     
-    // 特殊处理SIGKILL和SIGSTOP信号，直接结束或停止进程
+    // 已经在findByPid中获取了p->lock，不需要再次获取
+    
+    // 特殊处理SIGKILL信号，直接结束进程
     if (signo == SIGKILL) {
-        // 获取p->lock以保护对进程状态的修改
-        // acquire(&p->lock); //这一步重复持有锁了，要注释掉
-        setkilled(p, -10 - signo);
-        // release(&p->lock);
+        // 直接设置killed值，避免调用setkilled可能导致的锁重入问题
+        p->killed = -10 - signo;
+        if (p->state == SLEEPING) {
+            // 唤醒睡眠中的进程
+            p->state = RUNNABLE;
+            add_task(p);
+        }
+        release(&p->lock); // 释放在findByPid中获取的锁
         return 0;
     }
     
-    // 获取锁以保护对signal结构的修改
-    acquire(&p->lock);
+    // 特殊处理SIGSTOP信号
+    if (signo == SIGSTOP) {
+        // SIGSTOP不能被阻塞或忽略
+        p->state = STOPPED;
+        sigaddset(&p->signal.sigpending, signo);
+        p->signal.siginfos[signo].si_signo = signo;
+        p->signal.siginfos[signo].si_code = code;
+        p->signal.siginfos[signo].si_pid = curr_proc()->pid;
+        debugf("proc %d is stopped by SIGSTOP via sys_sigkill", p->pid);
+        release(&p->lock); // 释放在findByPid中获取的锁
+        return 0;
+    }
+    
+    // 特殊处理SIGCONT信号
+    if (signo == SIGCONT) {
+        sigaddset(&p->signal.sigpending, signo);
+        p->signal.siginfos[signo].si_signo = signo;
+        p->signal.siginfos[signo].si_code = code;
+        p->signal.siginfos[signo].si_pid = curr_proc()->pid;
+        
+        // 如果进程已经被SIGSTOP停止，恢复它
+        if (p->state == STOPPED) {
+            p->state = RUNNABLE;
+            add_task(p); // 我们已经持有p->lock，可以直接调用add_task
+            debugf("proc %d is continued by SIGCONT via sys_sigkill", p->pid);
+        }
+        
+        // 清除所有等待的SIGSTOP信号
+        if (sigismember(&p->signal.sigpending, SIGSTOP)) {
+            sigdelset(&p->signal.sigpending, SIGSTOP);
+        }
+        
+        release(&p->lock); // 释放在findByPid中获取的锁
+        return 0;
+    }
     
     // 设置pending信号位
     sigaddset(&p->signal.sigpending, signo);
@@ -412,7 +476,7 @@ int sys_sigkill(int pid, int signo, int code) {
     p->signal.siginfos[signo].si_code = code;
     p->signal.siginfos[signo].si_pid = curr_proc()->pid; // 设置发送进程的pid
     
-    release(&p->lock);
+    release(&p->lock); // 释放在findByPid中获取的锁
     
     return 0;
 }

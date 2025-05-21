@@ -43,7 +43,7 @@ struct cpu {
     int cpuid;                     // for debug purpose
 };
 
-enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE, STOPPED };
 
 extern struct proc *pool[];
 
@@ -99,6 +99,8 @@ int iskilled(struct proc *);
 void setkilled(struct proc *, int reason);
 
 // findByPid函数声明
+// 如果找到进程，返回进程指针且持有进程锁，由调用者负责释放锁
+// 如果未找到进程，返回NULL
 struct proc *findByPid(int pid);
 
 void sleep(void *chan, spinlock_t *lk);

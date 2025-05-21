@@ -9,7 +9,11 @@
 int fork();
 int exec(char *path, char *argv[]);
 void __attribute__((noreturn)) exit(int status);
-void kill(int pid);
+// 重命名原始的kill函数
+int sigkill(int pid, int signo, int code);
+// 定义向后兼容的kill函数
+static inline int kill(int pid) { return sigkill(pid, SIGKILL, 0); }
+
 int wait(int pid, int *status);
 int getpid();
 int getppid();
@@ -26,7 +30,6 @@ int ktest(int type, void * arg, uint64 len);
 
 int sigaction(int signo, const sigaction_t *act, sigaction_t *oldact);
 void sigreturn();
-int sigkill(int pid, int signo, int code);
 int sigpending(sigset_t *set);
 int sigprocmask(int how, const sigset_t *newset, sigset_t *oldset);
 

@@ -19,7 +19,7 @@ entry("fork");
 entry("exec");
 entry("exit");
 entry("wait");
-entry("kill");
+# entry("kill");  # 原始的kill不再需要，使用sigkill代替
 entry("getpid");
 entry("getppid");
 entry("sleep");
@@ -37,3 +37,5 @@ entry("sigreturn");
 entry("sigkill");
 entry("sigpending");
 entry("sigprocmask");
+
+# kill已经在syscall.h中定义为内联函数，不需要这里的定义

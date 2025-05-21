@@ -92,6 +92,9 @@ void scheduler() {
 
         if (p->state == RUNNABLE) {
             add_task(p);
+        } else if (p->state == STOPPED) {
+            // 如果进程被SIGSTOP停止，不要加入调度队列
+            debugf("scheduler: proc %d is stopped, not adding to task queue", p->pid);
         }
         release(&p->lock);
     }
