@@ -193,7 +193,7 @@ int do_signal(void) {
         
         // 4. 构造siginfo_t结构
         siginfo_t info = p->signal.siginfos[signo];
-        
+
         // 5. 将ucontext和siginfo_t复制到用户栈
         uint64 uc_addr = new_sp + sizeof(siginfo_t);
         uint64 info_addr = new_sp;
@@ -487,11 +487,14 @@ int sys_sigkill(int pid, int signo, int code) {
     sigaddset(&p->signal.sigpending, signo);
     
     // 填充siginfo信息
+    //5.3.2
     p->signal.siginfos[signo].si_signo = signo;
-    p->signal.siginfos[signo].si_code = code;
+    p->signal.siginfos[signo].si_code = 0; // 默认为0
     p->signal.siginfos[signo].si_pid = curr_proc()->pid; // 设置发送进程的pid
-    
-    release(&p->lock); // 释放在findByPid中获取的锁
+    p->signal.siginfos[signo].si_status = 0;
+    p->signal.siginfos[signo].addr = 0;
+
+    release(&p->lock);
     
     return 0;
 }
