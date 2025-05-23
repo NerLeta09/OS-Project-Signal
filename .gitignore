@@ -10,3 +10,6 @@ kernel_app.ld
 *.asm
 *.sym
 *.img
+
+connect.ps1
+Project_*.pdf
