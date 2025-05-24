@@ -97,6 +97,7 @@ found:
     p->sleep_chan = NULL;
     p->pid        = allocpid();
     p->state      = USED;
+    p->need_stop  = 0;  // 初始化need_stop字段
 
     // fork or exec(load_user_elf) will initialize these:
     p->mm      = NULL;

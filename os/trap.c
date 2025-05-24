@@ -223,7 +223,20 @@ void usertrapret() {
     if (intr_get())
         panic("usertrapret entered with intr on");
 
-    struct trapframe *trapframe = curr_proc()->trapframe;
+    struct proc *p = curr_proc();
+    struct trapframe *trapframe = p->trapframe;
+    
+    // 检查是否需要停止进程
+    if (p->need_stop) {
+        p->need_stop = 0;  // 清除标志
+        debugf("proc %d is stopping due to SIGSTOP", p->pid);
+        acquire(&p->lock);
+        p->state = STOPPED;
+        sched();
+        // 如果进程被恢复，会从这里继续执行
+        release(&p->lock);
+        debugf("proc %d is resumed after SIGSTOP", p->pid);
+    }
 
     // set up trapframe values that uservec will need when
     // the process next traps into the kernel.

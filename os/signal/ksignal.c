@@ -98,9 +98,11 @@ int do_signal(void) {
         // 处理SIGSTOP信号
         if (signo == SIGSTOP) {
             sigdelset(&p->signal.sigpending, signo);
-            p->state = STOPPED;
-            debugf("proc %d is stopped by SIGSTOP", p->pid);
-            yield(); // 放弃CPU
+            // 设置进程状态为STOPPED，但不立即切换
+            // 注意：不要调用sched()，因为我们在中断处理中
+            // 而是设置一个标志，让进程在返回用户态后自行停止
+            debugf("proc %d received SIGSTOP, will stop after returning to user mode", p->pid);
+            p->need_stop = 1;  // 设置标志，表示进程需要停止
             continue;
         }
         
@@ -110,10 +112,12 @@ int do_signal(void) {
             // 如果进程已经被SIGSTOP停止，恢复它
             if (p->state == STOPPED) {
                 p->state = RUNNABLE;
-                // 注意：不要在这里调用add_task，因为do_signal是在中断上下文调用的
-                // 由调度器负责添加RUNNABLE状态的进程到任务队列
+                // 在do_signal中，进程已经在运行，所以不需要add_task
+                // 只需要确保它不会被标记为STOPPED
                 debugf("proc %d is continued by SIGCONT", p->pid);
             }
+            // 清除need_stop标志，防止进程在返回用户态时被停止
+            p->need_stop = 0;
             // 清除所有等待的SIGSTOP信号
             if (sigismember(&p->signal.sigpending, SIGSTOP)) {
                 sigdelset(&p->signal.sigpending, SIGSTOP);
@@ -435,12 +439,20 @@ int sys_sigkill(int pid, int signo, int code) {
     // 特殊处理SIGSTOP信号
     if (signo == SIGSTOP) {
         // SIGSTOP不能被阻塞或忽略
-        p->state = STOPPED;
+        // 不直接设置进程状态为STOPPED，而是设置pending信号
+        // 让进程在do_signal中处理SIGSTOP信号时自行停止
         sigaddset(&p->signal.sigpending, signo);
         p->signal.siginfos[signo].si_signo = signo;
         p->signal.siginfos[signo].si_code = code;
         p->signal.siginfos[signo].si_pid = curr_proc()->pid;
-        debugf("proc %d is stopped by SIGSTOP via sys_sigkill", p->pid);
+        
+        // 如果进程正在睡眠，唤醒它让它处理信号
+        if (p->state == SLEEPING) {
+            p->state = RUNNABLE;
+            add_task(p);
+        }
+        
+        debugf("proc %d received SIGSTOP via sys_sigkill", p->pid);
         release(&p->lock); // 释放在findByPid中获取的锁
         return 0;
     }
@@ -451,6 +463,9 @@ int sys_sigkill(int pid, int signo, int code) {
         p->signal.siginfos[signo].si_signo = signo;
         p->signal.siginfos[signo].si_code = code;
         p->signal.siginfos[signo].si_pid = curr_proc()->pid;
+        
+        // 清除need_stop标志，防止进程在返回用户态时被停止
+        p->need_stop = 0;
         
         // 如果进程已经被SIGSTOP停止，恢复它
         if (p->state == STOPPED) {

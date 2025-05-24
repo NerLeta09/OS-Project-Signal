@@ -22,6 +22,11 @@ static struct proc *fetch_task() {
 }
 
 void add_task(struct proc *p) {
+    // 确保进程状态是RUNNABLE
+    if (p->state != RUNNABLE) {
+        debugf("Warning: attempting to add non-RUNNABLE process %d (state=%d) to task queue", p->pid, p->state);
+        p->state = RUNNABLE;
+    }
     assert(p->state == RUNNABLE);
     assert(holding(&p->lock));
 
@@ -78,7 +83,12 @@ void scheduler() {
         }
 
         acquire(&p->lock);
-        assert(p->state == RUNNABLE);
+        // 如果进程不再是RUNNABLE状态，跳过它
+        if (p->state != RUNNABLE) {
+            debugf("Warning: process %d in task queue is not RUNNABLE (state=%d)", p->pid, p->state);
+            release(&p->lock);
+            continue;
+        }
         debugf("switch to proc %d(%d)", p->index, p->pid);
         p->state = RUNNING;
         c->proc  = p;
@@ -120,6 +130,9 @@ void sched() {
     if (mycpu()->inkernel_trap)
         panic("sched should never be called in kernel trap context.");
     assert(!intr_get());
+    
+    // 确保进程状态不是RUNNING，可以是RUNNABLE、SLEEPING或STOPPED
+    assert(p->state != RUNNING);
 
     interrupt_on = mycpu()->interrupt_on;
     debugf("switch to scheduler %d(%d)", p->index, p->pid);

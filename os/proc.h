@@ -69,6 +69,9 @@ struct proc {
 
     // Project signal:
     struct ksignal signal;
+    
+    // SIGSTOP相关
+    int need_stop;                     // 标记进程是否需要停止
 };
 
 static inline int cpuid() {
