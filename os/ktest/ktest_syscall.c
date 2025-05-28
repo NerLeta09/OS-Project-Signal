@@ -17,6 +17,8 @@ uint64 ktest_syscall(uint64 args[6]) {
             return freepages_count;
         case KTEST_GET_NRSTRBUF:
             return kstrbuf.available_count;
+        case KTEST_SEND_SIGUSR2:
+            return sys_sigkill(args[1], SIGUSR2, 0);
     }
     return 0;
 }

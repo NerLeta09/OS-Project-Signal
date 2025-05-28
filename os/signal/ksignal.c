@@ -421,7 +421,13 @@ int sys_sigkill(int pid, int signo, int code) {
     struct proc *p = findByPid(pid);
     if(p == NULL) return -EINVAL; // 进程不存在
     
-    // 已经在findByPid中获取了p->lock，不需要再次获取
+    // 填充siginfo信息
+    //5.3.2
+    p->signal.siginfos[signo].si_signo = signo;
+    p->signal.siginfos[signo].si_code = 0; // 默认为0
+    p->signal.siginfos[signo].si_pid = curr_proc()->pid;
+    p->signal.siginfos[signo].si_status = 0;
+    p->signal.siginfos[signo].addr = 0;
     
     // 特殊处理SIGKILL信号，直接结束进程
     if (signo == SIGKILL) {
@@ -442,9 +448,6 @@ int sys_sigkill(int pid, int signo, int code) {
         // 不直接设置进程状态为STOPPED，而是设置pending信号
         // 让进程在do_signal中处理SIGSTOP信号时自行停止
         sigaddset(&p->signal.sigpending, signo);
-        p->signal.siginfos[signo].si_signo = signo;
-        p->signal.siginfos[signo].si_code = code;
-        p->signal.siginfos[signo].si_pid = curr_proc()->pid;
         
         // 如果进程正在睡眠，唤醒它让它处理信号
         if (p->state == SLEEPING) {
@@ -460,9 +463,6 @@ int sys_sigkill(int pid, int signo, int code) {
     // 特殊处理SIGCONT信号
     if (signo == SIGCONT) {
         sigaddset(&p->signal.sigpending, signo);
-        p->signal.siginfos[signo].si_signo = signo;
-        p->signal.siginfos[signo].si_code = code;
-        p->signal.siginfos[signo].si_pid = curr_proc()->pid;
         
         // 清除need_stop标志，防止进程在返回用户态时被停止
         p->need_stop = 0;
@@ -482,18 +482,19 @@ int sys_sigkill(int pid, int signo, int code) {
         release(&p->lock); // 释放在findByPid中获取的锁
         return 0;
     }
+
+    //特殊处理: 内核发送的信号
+    if(signo == SIGUSR2) {
+        p->signal.siginfos[signo].si_pid = -1;
+        sigaddset(&p->signal.sigpending, signo);
+
+        release(&p->lock);
+        return 0;
+    }
     
     // 设置pending信号位
     sigaddset(&p->signal.sigpending, signo);
     
-    // 填充siginfo信息
-    //5.3.2
-    p->signal.siginfos[signo].si_signo = signo;
-    p->signal.siginfos[signo].si_code = 0; // 默认为0
-    p->signal.siginfos[signo].si_pid = curr_proc()->pid; // 设置发送进程的pid
-    p->signal.siginfos[signo].si_status = 0;
-    p->signal.siginfos[signo].addr = 0;
-
     release(&p->lock);
     
     return 0;

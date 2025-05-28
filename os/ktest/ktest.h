@@ -8,5 +8,6 @@ uint64 ktest_syscall(uint64 args[6]);
 #define KTEST_PRINT_KERNPGT 2
 #define KTEST_GET_NRFREEPGS 3
 #define KTEST_GET_NRSTRBUF  4
+#define KTEST_SEND_SIGUSR2  5
 
 #endif  // __KTEST_H__
