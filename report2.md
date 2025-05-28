@@ -137,7 +137,7 @@ if (signo == SIGCONT) {
 
 ### 5.3.2 SIGINFO
 
-（这里需要一张上板截图）
+![image-20250528222616552](D:\FinresandPheoton\2025Spring\OS\OS-Project-Signal\assets\image-20250528222616552.png)
 
 ### 5.3.4 SIGSTOP & SIGCONT
 
