@@ -3,6 +3,7 @@
 #include "signal-project-tests/basic.c"
 #include "signal-project-tests/sigstoptest.c"
 #include "signal-project-tests/siginfotest.c"
+#include "signal-project-tests/sigchldtest.c"
 
 // basic 1-3
 
@@ -28,6 +29,8 @@ struct test {
 
     {siginfo_basic, "siginfo_basic"},
     {siginfo_kernel, "siginfo_kernel"},
+
+    {sigchldtest, "sigchldtest"},
     
     {NULL,    NULL     },
 };

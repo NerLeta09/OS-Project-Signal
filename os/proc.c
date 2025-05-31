@@ -316,7 +316,8 @@ int wait(int pid, int __user *code) {
 // Exit the current process.
 void exit(int code) {
     struct proc *p = curr_proc();
-
+    struct proc *parent_proc = p->parent;
+    
     if (p == init_proc) {
         panic("init process exited");
     }
@@ -341,8 +342,28 @@ void exit(int code) {
     if (wakeinit)
         wakeup(init_proc);
 
-    // wakeup wait-ing parent.
-    //  There is no race because locking against "wait_lock"
+
+
+    //5.3.3: 向父进程发送 SIGCHLD 信号（排除init进程）
+    if (parent_proc && !wakeinit && parent_proc != init_proc) {
+
+        // 保存父进程PID（防止父进程改变）
+        int ppid = parent_proc->pid;
+        int child_pid = p->pid;
+        int exit_code = 0;
+        
+        // 临时释放锁避免死锁
+        release(&wait_lock);
+        
+        // 发送SIGCHLD信号
+        sys_sigkill(ppid, SIGCHLD, code);
+        
+        // 重新获取锁
+        acquire(&wait_lock);
+            
+    }
+
+    // 唤醒等待的父进程
     wakeup(p->parent);
 
     acquire(&p->lock);
@@ -372,6 +393,14 @@ int kill(int pid) {
                 p->state = RUNNABLE;
                 add_task(p);
             }
+            struct proc *parent_proc = p->parent;
+
+            if (parent_proc != NULL) {
+                
+                sys_sigkill(parent_proc->pid, SIGCHLD, -1);
+        
+            }
+            
             release(&p->lock);
             return 0;
         }
