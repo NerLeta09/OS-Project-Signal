@@ -507,9 +507,6 @@ int sys_sigkill(int pid, int signo, int code) {
             p->state = RUNNABLE;
             add_task(p);
         }
-
-        // 在信号处理函数中打印 siginfo
-
         release(&p->lock);
         return 0;
 
