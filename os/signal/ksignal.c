@@ -138,6 +138,12 @@ int do_signal(void) {
         // 如果信号被忽略，继续处理下一个信号
         if (sa->sa_sigaction == SIG_IGN)
             continue;
+
+        if (signo == SIGCHLD && sa->sa_sigaction == SIG_DFL)
+        {
+            continue;
+        }
+        
             
         // 如果使用默认处理方式，结束进程
         if(sa->sa_sigaction == SIG_DFL) {
@@ -491,6 +497,25 @@ int sys_sigkill(int pid, int signo, int code) {
         release(&p->lock);
         return 0;
     }
+
+    if (signo == SIGCHLD)
+    {
+        p->signal.siginfos[signo].si_code = code;
+
+        sigaddset(&p->signal.sigpending, signo);
+        if (p->state == SLEEPING) {
+            p->state = RUNNABLE;
+            add_task(p);
+        }
+
+        // 在信号处理函数中打印 siginfo
+
+        release(&p->lock);
+        return 0;
+
+    }
+    
+
     
     // 设置pending信号位
     sigaddset(&p->signal.sigpending, signo);
